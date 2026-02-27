@@ -18,7 +18,7 @@ TimerDisplay::TimerDisplay(Adafruit_Protomatter &matrix, Mode mode)
       _threshold_count(0),
       _last_blink_ms(0),
       _blink_state(true),
-      _was_expired(false)
+      _last_blink_mode(BlinkMode::NONE)
 {
     // Initialize cached positions as invalid
     _pos_single_digit_minutes.valid = false;
@@ -182,37 +182,35 @@ Timer &TimerDisplay::getTimer()
     return _timer;
 }
 
-void TimerDisplay::update()
+bool TimerDisplay::tickBlink()
 {
     unsigned long current_ms = millis();
+    bool old_state = _blink_state;
     
-    // Handle flashing when expired (check this first, even if running)
+    // Handle flashing when expired
     if (_timer.isExpired())
     {
-        // If we just became expired, start with visible state
-        if (!_was_expired)
+        if (_last_blink_mode != BlinkMode::EXPIRED)
         {
             _blink_state = true;
             _last_blink_ms = current_ms;
-            _was_expired = true;
+            _last_blink_mode = BlinkMode::EXPIRED;
         }
         
-        // Flash faster when expired (every 500ms)
         if (current_ms - _last_blink_ms >= 500)
         {
             _blink_state = !_blink_state;
             _last_blink_ms = current_ms;
         }
     }
-    // Handle blinking when paused (not idle, not running)
+    // Handle blinking when paused
     else if (_timer.isPaused())
     {
-        // If we just became paused, start with invisible state
-        if (_was_expired)
+        if (_last_blink_mode != BlinkMode::PAUSED)
         {
-            _blink_state = false;
+            _blink_state = false;  // Start invisible so pause is immediately obvious
             _last_blink_ms = current_ms;
-            _was_expired = false;
+            _last_blink_mode = BlinkMode::PAUSED;
         }
         
         if (current_ms - _last_blink_ms >= 500)
@@ -223,11 +221,17 @@ void TimerDisplay::update()
     }
     else
     {
-        // Always show when running normally or idle (no blinking)
         _blink_state = true;
-        _was_expired = false;
+        _last_blink_mode = BlinkMode::NONE;
     }
+    
+    return _blink_state != old_state;
+}
 
+void TimerDisplay::update()
+{
+    // Blink state is managed by tickBlink(), called from main loop.
+    // Just draw the current state.
     draw();
 }
 

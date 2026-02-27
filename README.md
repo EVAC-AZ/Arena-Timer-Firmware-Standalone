@@ -1,53 +1,37 @@
 # Arena Timer Firmware
 
-A professional countdown timer system for competitive arenas, combat sports, and event timing. Built on the Waveshare RP2040-Zero with a vibrant 64x32 RGB LED matrix display, web-based control, and seamless integration with [FightTimer](https://github.com/PongAlmighty/FightTimer) by PongAlmighty.
+A networked countdown timer, originally built for combat robotics. Runs on a Waveshare RP2040-Zero driving a 64x32 RGB LED matrix, with a web-based control panel and optional WebSocket connection to PongAlmighty's [FightTimer](https://github.com/PongAlmighty/FightTimer).
 
 ## Features
 
-### Display & Visual Customization
-- **64x32 RGB LED Matrix** with full color control
-- **Dynamic Color Thresholds** - automatically change colors as time decreases
-- **Multiple Font Choices** - Sans, Serif, Monospace, Retro/Pixel styles
-- **Adjustable Brightness** - 0-255 levels for any lighting condition
-- **Character Spacing Control** - fine-tune text appearance
-- **Display Rotation** - flip orientation 180° with one button
-
-### Timer Controls
-- **Countdown Mode** - configurable duration up to 60 minutes
-- **Start/Pause/Reset** - full manual control
-- **Sub-Second Precision** - displays tenths of seconds under 1 minute
-- **Visual States** - blinking when paused, flashing when expired
-
-### Web Interface
-- **Responsive Three-Column Layout** - Timer controls, color settings, system status
-- **Real-Time Console** - live event logging with timestamps
-- **Live Updates** - automatic status refresh and button state management
-- **Mobile Friendly** - works on phones, tablets, and desktops
-
-### Network & Integration
-- **DHCP Support** with static IP fallback (10.0.0.21)
-- **mDNS Hostname** - access via `http://arenatimer.local`
-- **FightTimer Integration** - Socket.IO connection for synchronized timing (credit: [PongAlmighty](https://github.com/PongAlmighty/))
-- **RESTful API** - control timer programmatically
+- **64x32 RGB LED Matrix** — HUB75 interface, double-buffered via Adafruit Protomatter
+- **Configurable Countdown** — up to 60 minutes, deci-second display under 1 minute
+- **Color Thresholds** — automatic color changes as time decreases (up to 10 thresholds)
+- **Web Control Panel** — responsive three-column layout for timer, colors, and system settings
+- **Real-Time WebSocket Push** — browser updates via WebSocket with client-side interpolation for low-lag display
+- **Persistent Settings** — saves to flash (RP2040 EEPROM emulation) with explicit Save button
+- **Multiple Fonts** — Sans, Serif, Mono, Retro/Pixel, and custom Aquire variants
+- **Display Options** — adjustable brightness, letter spacing, 180° rotation
+- **FightTimer Integration** — syncs start/stop/reset/duration via Socket.IO
+- **mDNS** — accessible at `http://arenatimer.local` from PCs (see [Phone Access](#phone-access))
 
 ## Hardware
 
 ### Required Components
 - **Waveshare RP2040-Zero** microcontroller
-- **64x32 RGB LED Matrix Panel** (HUB75 interface, P5 pitch recommended)
+- **64x32 RGB LED Matrix Panel** (HUB75, P5 pitch recommended)
 - **W5500 Ethernet Module** (SPI interface)
-- **5V Power Supply** (minimum 2A, 4A recommended for full brightness / more pixels)
+- **5V Power Supply** (minimum 2A, 4A recommended for full brightness)
   - I used a 5V 20W PoE splitter mounted to the back of the enclosure
 
 ### 3D Enclosure
-3D model files for a custom LED matrix enclosure are available in the `3d-models/` directory:
-- `Timer Assembly v23.step` - STEP format for CAD editing
-- `Timer Assembly v23.f3z` - Fusion 360 archive format
+3d model files in `3d-models/`:
+- `Timer Assembly v23.step` — STEP format for CAD editing
+- `Timer Assembly v23.f3z` — Fusion 360 archive
+- 
+Note that these models are built to accommodate my particular electronics prototype. A proper PCB and more integrated mounting solution is coming soon!
 
-Files are print-ready and designed for:
-- Standard 64x32 P5 RGB matrix panels
-- Electronics mounting (currently using custom protoboard assembly)
-- PoE splitter bracket mount
+If you plan on using this outside in the sun, I'd recommend printing out of a high-temperature, UV-resistant filament like ASA. Use PLA at your own risk...
 
 ## Quick Start
 
@@ -56,253 +40,135 @@ Files are print-ready and designed for:
 pio run --target upload
 ```
 
-### 2. Network Connection
-The timer will attempt DHCP, then fall back to `10.0.0.21` if unavailable. The assigned IP displays on the matrix for 5 seconds at startup.
+### 2. Network
+The timer uses DHCP by default (10 second timeout). If DHCP fails, it falls back to `10.0.0.21`. The assigned IP is shown on the LED matrix for 10 seconds at startup.
+
+Edit `src/main.cpp` to change the fallback IP or hostname:
+```cpp
+uint8_t static_ip[] = {10, 0, 0, 21};
+const char* hostname = "arenatimer";
+```
 
 ### 3. Web Interface
-Access the control panel at:
-- `http://arenatimer.local` (mDNS)
-- `http://[IP_ADDRESS]` (direct)
+Open in a browser:
+- `http://arenatimer.local` (mDNS — works on PCs, not mobile)
+- `http://10.0.0.21` (direct IP — works everywhere)
 
-Use the web interface to:
-- Start, pause, and reset the timer
-- Set duration (minutes and seconds)
-- Configure color thresholds for time-based alerts
-- Adjust display settings (font, brightness, letter spacing)
-- Flip display orientation
-- Monitor system status and event logs
+### Phone Access
+
+**mDNS (`.local`) does not work on mobile.** Use the IP address directly.
+
+If you're on a dedicated arena network with no internet access, your phone may prefer mobile data over WiFi. To fix this, you may need to disable mobile data. A more comprehensive fix is coming in the future, but may depend on additional hardware...
 
 ### 4. FightTimer Integration
-To connect with FightTimer:
-1. Ensure FightTimer is running on your network
-2. In the **WebSocket Connection** section, enter:
-   - **Host**: IP address of the computer running FightTimer
-   - **Port**: `8765` (default Socket.IO port)
-   - **Path**: `/socket.io/`
-3. Click **Connect**
+In the **WebSocket Connection** section of the web UI:
+1. Enter the FightTimer host IP, port (`8765`), and path (`/socket.io/`)
+2. Click **Connect**
 
-The timer will automatically sync with FightTimer's start/stop/reset commands and duration settings.
-
-**What Gets Synchronized:**
-- ✅ Timer start/stop/reset commands
-- ✅ Duration changes
-- ✅ Time remaining updates
-- ✅ Expired/paused states
-
-FightTimer sends `timer_update` events via Socket.IO that control the Arena Timer display.
-
-**Alternative connection methods:**
-
-Via code in `src/main.cpp`:
-```cpp
-void setup() {
-    // ... existing setup code ...
-    wsClient->connect("192.168.1.100", 8765, "/socket.io/");
-}
-```
-
-Via API endpoint:
-```bash
-curl -X POST "http://arenatimer.local/api/websocket/connect" \
-  -d "host=192.168.1.100&port=8765&path=/socket.io/"
-```
+Syncs: start/stop/reset commands, duration changes, time updates, expired/paused states.
 
 ## Configuration
 
 ### Network Settings
-Edit `src/main.cpp` to change network defaults:
+The MAC address is auto-generated from each RP2040's unique flash serial number — no manual configuration needed, no collisions between multiple timers.
+
+Fallback IP and hostname can be changed in `src/main.cpp`:
 ```cpp
-uint8_t mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};  // MAC address
-uint8_t static_ip[] = {10, 0, 0, 21};                   // Static IP fallback
-const char* hostname = "arenatimer";                     // mDNS hostname
+uint8_t static_ip[] = {10, 0, 0, 21};
+const char* hostname = "arenatimer";
 ```
 
-### Display Settings
-Configure default display settings in `src/main.cpp`:
+### Display Defaults
+In `src/main.cpp` (overridden by saved settings on subsequent boots):
 ```cpp
-// Set default font
 timerDisplay.setFont(&FreeSansBold12pt7b);
-
-// Set default duration (hours, minutes, seconds)
-timerDisplay.getTimer().setDuration({0, 3, 0});  // 3 minutes
-
-// Color thresholds (set via web interface or programmatically)
-timerDisplay.addColorThreshold(120, 255, 255, 0);  // Yellow at 2 minutes
-timerDisplay.addColorThreshold(60, 255, 0, 0);     // Red at 1 minute
+timerDisplay.getTimer().setDuration({3, 0, 0});  // 3 minutes
 ```
 
 ### Available Fonts
-- **Sans**: `FreeSans9pt7b`, `FreeSans12pt7b`, `FreeSansBold9pt7b`, `FreeSansBold12pt7b`
-- **Serif**: `FreeSerif9pt7b`, `FreeSerif12pt7b`, `FreeSerifBold9pt7b`, `FreeSerifBold12pt7b`
-- **Mono**: `FreeMono9pt7b`, `FreeMono12pt7b`, `FreeMonoBold9pt7b`, `FreeMonoBold12pt7b`
-- **Retro**: `Org_01`, `Picopixel`, `TomThumb` (ultra-compact pixel fonts)
-- **Custom**: `Aquire_BW0ox12pt7b`, `AquireBold_8Ma6012pt7b`, `AquireLight_YzE0o12pt7b`
+| Category | Fonts |
+|----------|-------|
+| Sans | `FreeSans9pt7b`, `FreeSans12pt7b`, `FreeSansBold9pt7b`, `FreeSansBold12pt7b` |
+| Serif | `FreeSerif9pt7b`, `FreeSerif12pt7b`, `FreeSerifBold9pt7b`, `FreeSerifBold12pt7b` |
+| Mono | `FreeMono9pt7b`, `FreeMono12pt7b`, `FreeMonoBold9pt7b`, `FreeMonoBold12pt7b` |
+| Retro | `Org_01`, `Picopixel`, `TomThumb` |
+| Custom | `Aquire_BW0ox12pt7b`, `AquireBold_8Ma6012pt7b`, `AquireLight_YzE0o12pt7b` |
 
-### Pin Configuration
-Default pins are defined in `include/RGBMatrix.h` for the Waveshare RP2040-Zero. Modify if using different pin connections.
-
-### Performance Optimization
-The firmware includes debug flags that can be disabled for optimal timing performance:
-
+### Debug Output
+Disable all serial output for production (eliminates timing overhead):
 ```cpp
-// src/main.cpp
+// src/main.cpp, WebServer.cpp, WebSocketClient.cpp
 #define DEBUG_MAIN false
-
-// src/WebServer.cpp
 #define DEBUG_WEBSERVER false
-
-// src/WebSocketClient.cpp
 #define DEBUG_WEBSOCKET false
 ```
 
-When all debug flags are `false`, Serial output is disabled, eliminating timing delays. This is recommended for production use.
+## Architecture
 
-## API Reference
+### Communication
+- **HTTP (port 80)** — serves the HTML/CSS/JS control page only
+- **WebSocket Server (port 81)** — all real-time communication with browsers (push-based, no polling)
+- **WebSocket Client** — outbound connection to FightTimer (port 8765)
 
-The timer exposes a RESTful API for programmatic control:
+### Display Pipeline
+The main loop detects content changes (timer tick, blink state, settings change) and only redraws when needed. Network operations are staggered across 10ms slots to prevent SPI contention with the Protomatter display ISR.
 
-### Timer Control
-```bash
-# Start timer
-POST /api?action=start
-
-# Pause timer
-POST /api?action=pause
-
-# Reset timer
-POST /api?action=reset
-
-# Flip display orientation
-POST /api?action=flip
-```
-
-### Settings
-```bash
-# Update timer settings
-POST /api?action=settings&duration=180&font=4&spacing=3&brightness=255
-
-# Update color thresholds
-POST /api/thresholds
-Content-Type: application/x-www-form-urlencoded
-thresholds=120:%23FFFF00|60:%23FF0000&default=%2300FF00
-```
-
-### Status Information
-```bash
-# Get timer status
-GET /api/status
-
-# Get network information
-GET /api/network/status
-
-# Get WebSocket connection status
-GET /api/websocket/status
-```
-
-### WebSocket Connection
-```bash
-# Connect to FightTimer
-POST /api/websocket/connect
-Content-Type: application/x-www-form-urlencoded
-host=192.168.1.100&port=8765&path=/socket.io/
-
-# Disconnect
-POST /api/websocket/disconnect
-```
-
-## Troubleshooting
-
-### Display Issues
-- **Blank display**: Check power supply (5V, minimum 2A recommended)
-- **Corrupted display**: Verify HUB75 cable connections
-- **Wrong colors**: Check RGB pin mappings in `src/RGBMatrix.cpp`
-
-### Network Issues
-- **Can't access web interface**: Check Ethernet cable, verify IP on display at startup
-- **DHCP not working**: Timer falls back to static IP `10.0.0.21`
-- **mDNS not resolving**: Try direct IP address instead
-
-### FightTimer Connection
-- **Won't connect**: Verify FightTimer is running and accessible at the specified host/port
-- **Connects but no updates**: Check that FightTimer is sending `timer_update` Socket.IO events
-- **Frequent disconnects**: Check network stability between devices
+### Settings Persistence
+Settings (duration, font, spacing, brightness, orientation, colors, thresholds) are stored in RP2040 flash-emulated EEPROM with magic number validation. Changes are applied live but only written to flash when the user clicks **Save Settings**.
 
 ## Development
 
 ### Build Environment
-- **Framework**: Arduino
-- **Platform**: Raspberry Pi Pico (RP2040)
-- **Tool**: PlatformIO
+- **Framework**: Arduino (earlephilhower RP2040 core)
+- **Build Tool**: PlatformIO
+- **Key Libraries**: Adafruit Protomatter, Ethernet (W5500), WebSockets (links2004), ArduinoJson, EthernetBonjour, EEPROM
 
-### Key Libraries
-- **Adafruit Protomatter** - RGB matrix driver
-- **Ethernet** - W5500 network interface
-- **WebSockets** - Socket.IO client (links2004/arduinoWebSockets)
-- **EthernetBonjour** - mDNS support
-
-### Building from Source
+### Building
 ```bash
-# Clone repository
 git clone https://github.com/EVAC-AZ/Arena-Timer-Firmware.git
 cd Arena-Timer-Firmware
-
-# Install dependencies
 pio pkg install
-
-# Build and upload
 pio run --target upload
-
-# Monitor serial output (optional)
-pio device monitor
+pio device monitor  # optional serial debug
 ```
 
 ### Project Structure
 ```
-arena-timer-firmware/
 ├── src/
-│   ├── main.cpp              # Entry point and configuration
-│   ├── Timer.cpp             # Core timer logic
-│   ├── TimerDisplay.cpp      # LED matrix display control
-│   ├── RGBMatrix.cpp         # Low-level matrix driver
-│   ├── WebServer.cpp         # Web server and API
-│   └── WebSocketClient.cpp   # Socket.IO client
+│   ├── main.cpp              # Setup, loop, display refresh logic
+│   ├── Timer.cpp             # Countdown timer state machine
+│   ├── TimerDisplay.cpp      # LED matrix rendering, blink logic
+│   ├── RGBMatrix.cpp         # Protomatter matrix driver wrapper
+│   ├── WebServer.cpp         # HTTP server, WebSocket server, web UI
+│   ├── WebSocketClient.cpp   # FightTimer Socket.IO client
+│   └── Settings.cpp          # Flash persistence (EEPROM)
 ├── include/
-│   ├── Timer.h
-│   ├── TimerDisplay.h
-│   ├── RGBMatrix.h
-│   ├── WebServer.h
-│   ├── WebSocketClient.h
-│   └── CustomFonts/          # Custom font definitions
-├── 3d-models/                # Enclosure models
-├── docs/                     # Documentation
-├── platformio.ini            # Build configuration
+│   ├── Timer.h, TimerDisplay.h, RGBMatrix.h
+│   ├── WebServer.h, WebSocketClient.h, Settings.h
+│   └── CustomFonts/
+├── 3d-models/
+├── platformio.ini
 └── README.md
 ```
 
-### Future Plans
-A standalone Arduino/PlatformIO library is planned to simplify integration of this timer system into other projects. The goal is to separate the timing/web UI/FightTimer integration code from the hardware-specific code, allowing use with different display hardware and microcontrollers (ESP32, ESP8266, etc.).
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| Blank display | Check 5V power (minimum 2A) |
+| Corrupted display | Verify HUB75 cable connections |
+| Can't access web UI | Check Ethernet cable; IP shows on matrix at startup |
+| mDNS not resolving | Use direct IP; mDNS doesn't work on Android |
+| Phone won't connect | Disable mobile data or accept "no internet" WiFi prompt |
+| FightTimer won't connect | Verify FightTimer is running and host/port are correct |
+| Display flickers | Normal if heavy network activity; staggered SPI mitigates this |
 
 ## Credits
 
-- **FightTimer Integration**: [PongAlmighty/FightTimer](https://github.com/PongAlmighty/FightTimer) - Synchronized timing system for combat sports
-- **RGB Matrix Control**: Adafruit Protomatter library
-- **WebSocket Library**: Arduino WebSockets by links2004
-- **Enclosure Design**: EVAC-AZ
+- **FightTimer**: [PongAlmighty/FightTimer](https://github.com/PongAlmighty/FightTimer)
+- **RGB Matrix**: [Adafruit Protomatter](https://github.com/adafruit/Adafruit_Protomatter)
+- **WebSockets**: [links2004/arduinoWebSockets](https://github.com/Links2004/arduinoWebSockets)
 
 ## License
 
-This project is open source. See `LICENSE` for details.
-
-## Contributing
-
-Contributions are welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with clear commits
-4. Submit a pull request
-
-For bug reports and feature requests, open an issue on GitHub.
-
----
-
-**Built for arena timing excellence** 🏆
+See [LICENSE](LICENSE) for details.

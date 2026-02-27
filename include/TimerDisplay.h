@@ -90,6 +90,10 @@ public:
     /// @return Reference to the Timer
     Timer &getTimer();
 
+    /// @brief Update blink state based on timer mode. Call every loop iteration.
+    /// @return true if blink state changed and a redraw is needed
+    bool tickBlink();
+
     /// @brief Update and draw the timer on the display. Call this in loop()
     void update();
 
@@ -115,7 +119,10 @@ private:
     
     unsigned long _last_blink_ms;
     bool _blink_state;
-    bool _was_expired;  // Track if we were expired in the last update
+    
+    // Track which blink mode we were in last frame to detect transitions
+    enum class BlinkMode { NONE, PAUSED, EXPIRED };
+    BlinkMode _last_blink_mode;
     
     // Cached positions for different time formats to prevent jitter
     struct CachedPosition {

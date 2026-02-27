@@ -100,6 +100,10 @@ bool WebSocketClient::isConnected() {
 }
 
 void WebSocketClient::poll() {
+    // Don't poll the W5500 at all if no connection has ever been attempted.
+    // This avoids unnecessary SPI traffic that disrupts the display ISR.
+    if (!_connectionAttempted) return;
+    
     _client.loop();
     
     // Handle manual reconnection (only if not manually disconnected)
